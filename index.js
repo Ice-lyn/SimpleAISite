@@ -322,9 +322,9 @@ app.get('/ai-api/models', (req, res) => {
         for (const id of ids) {
             const internal = `${platform}__${id.includes('/') ? id : '/' + id}`;
             combined.push({
-                id: internal,
+                id: id,
                 platform,
-                upstream_id: id,
+                call_id: internal,
                 stats: usageStats[internal] || null
             });
         }
