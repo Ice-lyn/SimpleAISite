@@ -8,7 +8,7 @@ export default {
     // 平台定义
     platforms: {
         "opencode": { // 平台名称
-            url: "https://opencode/go/v1", // 平台 API 基础地址
+            url: "https://opencode.com/go/v1", // 平台 API 基础地址
             key: "sk-000000000000000000000000000000000000000000000000", // 平台 API 密钥
             defaultHeaders: {} // 可选的额外请求头
         },
