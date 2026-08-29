@@ -722,6 +722,151 @@
             background: var(--bg-hover);
         }
 
+        /* Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-input);
+            transition: .2s;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: var(--text-secondary);
+            transition: .2s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+            background-color: white;
+        }
+
+        /* Model multi-select dropdown */
+        .model-select-wrapper {
+            position: relative;
+        }
+
+        .model-select-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        /* 芯片容器：允许换行，占据按钮左侧空间 */
+        .model-chips-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* 单个模型芯片卡片样式 */
+        .model-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            background: var(--primary-light);
+            color: var(--primary);
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+            border: 1px solid var(--primary);
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .model-select-trigger {
+            /* 移除 button 默认的 padding 和内边距可能导致的问题 */
+            text-align: left;
+        }
+
+        /* 占位文本样式（当无选中模型时） */
+        .model-chips-placeholder {
+            color: var(--text-muted);
+            font-size: 0.88rem;
+        }
+
+        .model-select-trigger:hover {
+            background: var(--bg-hover);
+        }
+
+        .model-select-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-lg);
+            z-index: 10;
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .model-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s;
+        }
+
+        .model-checkbox-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .model-checkbox-item input[type="checkbox"] {
+            accent-color: var(--primary);
+            margin: 0;
+        }
+
         /* Modal */
         .modal-overlay {
             position: fixed;
@@ -968,6 +1113,7 @@
             gap: 12px;
             font-size: 0.75rem;
             color: var(--text-secondary);
+            flex-wrap: wrap;
         }
 
         .platform-card-actions {
@@ -1284,9 +1430,10 @@
                 </button>
             </nav>
             <div class="sidebar-footer">
-                <a href="https://github.com/Ice-lyn/SimpleAISite" target="_blank" rel="noopener noreferrer" class="github-link"
-                    title="GitHub 仓库" aria-label="GitHub 仓库">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <a href="https://github.com/Ice-lyn/SimpleAISite" target="_blank" rel="noopener noreferrer"
+                    class="github-link" title="GitHub 仓库" aria-label="GitHub 仓库">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg">
                         <path fill-rule="evenodd" clip-rule="evenodd"
                             d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z" />
                     </svg>
@@ -1512,6 +1659,25 @@
                         </button>
                     </div>
                 </div>
+                <!-- 模型白名单（下拉多选组件） -->
+                <div class="form-group">
+                    <label class="form-label">模型白名单 <span class="text-muted">(可选，留空则使用上游全部模型)</span></label>
+                    <div class="model-select-wrapper">
+                        <button type="button" class="model-select-trigger" id="modelSelectTrigger">
+                            <!-- 替换原来的 span 为芯片容器 -->
+                            <div id="modelChipsContainer" class="model-chips-container">
+                                <!-- 动态生成模型卡片（chip） -->
+                            </div>
+                            <i data-lucide="chevron-down" style="width:14px;height:14px;flex-shrink:0;"></i>
+                        </button>
+                        <div class="model-select-dropdown hidden" id="modelSelectDropdown">
+                            <div id="modelCheckboxList">
+                                <!-- 动态生成复选框 -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-hint">勾选需要开放的模型，不勾选任何模型表示使用上游所有模型</div>
+                </div>
                 <div class="form-group">
                     <label class="form-label">默认请求头 <span class="text-muted">(可选)</span></label>
                     <div id="headerPairs">
@@ -1523,6 +1689,14 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <!-- 启用状态开关（与按钮同级） -->
+                <div style="display:flex;align-items:center;gap:8px;margin-right:auto;">
+                    <label class="switch">
+                        <input type="checkbox" id="platformFormEnable" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span style="font-size:0.85rem;">启用该平台</span>
+                </div>
                 <button class="btn btn-outline" id="btnCancelPlatform">取消</button>
                 <button class="btn btn-primary" id="btnSavePlatform">
                     <i data-lucide="save" style="width:16px;height:16px;"></i> 保存
@@ -1587,6 +1761,7 @@
                 models: null, // from /ai-api/models
                 theme: localStorage.getItem('ai-api-theme') || 'light',
                 platformToDelete: null,
+                selectedModels: new Set(), // 当前编辑平台选中的模型集合
             };
 
             // ============ DOM refs ============
@@ -1647,6 +1822,12 @@
                 modelsModalBody: $('#modelsModalBody'),
                 btnCloseModelsModal: $('#btnCloseModelsModal'),
                 btnCloseModelsModalFooter: $('#btnCloseModelsModalFooter'),
+                // 新增 DOM 引用
+                platformFormEnable: $('#platformFormEnable'),
+                modelCheckboxList: $('#modelCheckboxList'),
+                modelSelectTrigger: $('#modelSelectTrigger'),
+                modelSelectText: $('#modelSelectText'),
+                modelSelectDropdown: $('#modelSelectDropdown'),
             };
 
             // ============ Theme ============
@@ -1759,29 +1940,23 @@
             // ============ Navigation ============
             function switchTab(tab) {
                 state.currentTab = tab;
-                // Desktop sidebar
                 $$('[data-nav]').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.tab === tab);
                 });
-                // Mobile nav
                 $$('[data-mobile-nav]').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.tab === tab);
                 });
-                // Panels
                 $$('.tab-panel').forEach(panel => {
                     panel.classList.add('hidden');
                 });
                 const panel = $(`#tab-${tab}`);
                 if (panel) panel.classList.remove('hidden');
-                // Page title
                 const titles = {
                     overview: '概览', tokens: 'Token 消耗', platforms: '模型提供商',
                     settings: '连接设置'
                 };
                 dom.pageTitle.textContent = titles[tab] || '概览';
-                // Close mobile sidebar
                 closeMobileSidebar();
-                // Load data per tab
                 if (tab === 'overview') loadOverviewData();
                 if (tab === 'tokens') loadUsageData();
                 if (tab === 'platforms') loadPlatformsData();
@@ -1802,7 +1977,6 @@
 
             dom.sidebarOverlay.addEventListener('click', closeMobileSidebar);
 
-            // Nav click handlers
             $$('[data-nav]').forEach(btn => {
                 btn.addEventListener('click', () => switchTab(btn.dataset.tab));
             });
@@ -1872,17 +2046,14 @@
 
             function renderUsage(usageData) {
                 const entries = Object.entries(usageData);
-                // Sort by last_used desc
                 entries.sort((a, b) => {
                     const la = a[1]?.last_used ? new Date(a[1].last_used).getTime() : 0;
                     const lb = b[1]?.last_used ? new Date(b[1].last_used).getTime() : 0;
                     return lb - la;
                 });
-                // Filter by search
                 const searchTerm = (dom.tokenSearch.value || '').toLowerCase().trim();
                 const filtered = searchTerm ? entries.filter(([id]) => id.toLowerCase().includes(searchTerm)) : entries;
 
-                // Summary stats
                 let totalPrompt = 0,
                     totalCompletion = 0,
                     totalTokens = 0,
@@ -1970,10 +2141,7 @@
                     state.platforms = data || {};
                     setConnectionStatus('connected', '已连接');
                     renderPlatforms(data || {});
-
-                    // 预加载模型数据（非阻塞）
                     loadModelsData().catch(() => { });
-                    renderPlatforms(data || {});
                 } catch (err) {
                     setConnectionStatus('disconnected', '连接失败');
                     state.platforms = null;
@@ -1982,7 +2150,6 @@
                 }
             }
 
-            // 加载所有平台的模型列表（用于查看模型）
             async function loadModelsData() {
                 try {
                     const data = await apiRequest('GET', '/ai-api/models');
@@ -2017,6 +2184,9 @@
 
                 let html = '';
                 entries.forEach(([name, info]) => {
+                    const isEnabled = info.enable !== false;
+                    const statusColor = isEnabled ? 'var(--success)' : 'var(--text-muted)';
+                    const statusText = isEnabled ? '已启用' : '已禁用';
                     html += `
                         <div class="platform-card">
                             <div class="platform-card-top">
@@ -2033,6 +2203,10 @@
                                 <span class="model-count-badge">
                                     <i data-lucide="box" style="width:12px;height:12px;"></i>
                                     ${info.model_count ?? '?'} 模型
+                                </span>
+                                <span style="display:flex;align-items:center;gap:4px;font-size:0.75rem;">
+                                    <span class="status-dot" style="width:8px;height:8px;border-radius:50%;background:${statusColor};"></span>
+                                    ${statusText}
                                 </span>
                             </div>
                             <div class="platform-card-actions">
@@ -2051,7 +2225,6 @@
                 dom.platformGrid.innerHTML = html;
                 refreshIcons();
 
-                // Bind events
                 $$('.btn-edit-platform').forEach(btn => {
                     btn.addEventListener('click', () => openPlatformModal(btn.dataset.platform));
                 });
@@ -2062,9 +2235,7 @@
                     btn.addEventListener('click', async () => {
                         const platform = btn.dataset.platform;
                         try {
-                            if (!state.models) {
-                                await loadModelsData();   // 按需加载模型数据
-                            }
+                            if (!state.models) await loadModelsData();
                             openModelsModal(platform);
                         } catch (err) {
                             showToast(`加载模型列表失败: ${err.message}`, 'error');
@@ -2074,9 +2245,7 @@
             }
 
             async function loadOverviewData() {
-                // Load health
                 await loadHealth();
-                // Load usage summary
                 try {
                     const data = await apiRequest('GET', '/ai-api/usage');
                     state.usage = data || {};
@@ -2149,7 +2318,6 @@
                 localStorage.setItem('ai-api-base-url', url);
                 localStorage.setItem('ai-api-key', key);
                 showToast('设置已保存', 'success');
-                // Refresh data with new settings
                 loadOverviewData();
             });
 
@@ -2160,7 +2328,6 @@
                     showToast('请输入 API 服务地址', 'error');
                     return;
                 }
-                // Temporarily set state for test
                 const oldUrl = state.baseUrl;
                 const oldKey = state.apiKey;
                 state.baseUrl = url;
@@ -2170,7 +2337,6 @@
                     const data = await apiRequest('GET', '/ai-api/health');
                     setConnectionStatus('connected', '已连接');
                     showToast(`连接成功！服务运行正常，已运行 ${formatUptime(data.uptime)}`, 'success');
-                    // Save settings
                     localStorage.setItem('ai-api-base-url', url);
                     localStorage.setItem('ai-api-key', key);
                 } catch (err) {
@@ -2203,19 +2369,15 @@
             dom.btnCheckHealth.addEventListener('click', loadHealth);
 
             // ============ Platform Modal ============
-            // 打开模型列表模态框
             function openModelsModal(platformName) {
                 const models = state.models || [];
                 const platformModels = models.filter(m => m.platform === platformName);
-
-                // 设置标题
                 dom.modelsModalTitle.innerHTML = `<i data-lucide="server" style="width:20px;height:20px;"></i> ${escapeHtml(platformName)} 的模型`;
                 dom.modelsModalBody.innerHTML = renderModelsTable(platformModels);
                 dom.modelsModalOverlay.classList.remove('hidden');
                 refreshIcons();
             }
 
-            // 关闭模型列表模态框
             function closeModelsModal() {
                 dom.modelsModalOverlay.classList.add('closing');
                 setTimeout(() => {
@@ -2224,7 +2386,6 @@
                 }, 180);
             }
 
-            // 渲染模型表格（用于模态框）
             function renderModelsTable(models) {
                 if (!models || models.length === 0) {
                     return `<div class="empty-state"><div class="empty-icon"><i data-lucide="inbox" style="width:24px;height:24px;"></i></div><p>该平台暂无模型数据</p></div>`;
@@ -2248,6 +2409,19 @@
                 html += '</tbody></table></div>';
                 return html;
             }
+
+            // 关闭平台模态框
+            function closePlatformModal() {
+                dom.platformModalOverlay.classList.add('closing');
+                setTimeout(() => {
+                    dom.platformModalOverlay.classList.add('hidden');
+                    dom.platformModalOverlay.classList.remove('closing');
+                    // 关闭可能打开的下拉
+                    dom.modelSelectDropdown.classList.add('hidden');
+                }, 180);
+            }
+
+            // 打开平台模态框
             function openPlatformModal(platformName) {
                 const isEdit = !!platformName;
                 dom.platformModalTitle.innerHTML =
@@ -2260,11 +2434,15 @@
                 dom.platformKeyVisibilityIcon.setAttribute('data-lucide', 'eye');
                 dom.headerPairs.innerHTML = '';
 
+                // 重置启用状态与模型选择器
+                if (dom.platformFormEnable) dom.platformFormEnable.checked = true;
+                state.selectedModels.clear();
+                updateModelSelectTriggerText();
+
                 if (isEdit && state.platforms && state.platforms[platformName]) {
                     dom.platformFormUrl.value = state.platforms[platformName].url || '';
                 }
 
-                // If editing, try to get full config for key and headers
                 if (isEdit) {
                     apiRequest('GET', '/ai-api/config/platforms')
                         .then(fullConfig => {
@@ -2273,16 +2451,23 @@
                             if (platformCfg) {
                                 dom.platformFormUrl.value = platformCfg.url || '';
                                 dom.platformFormKey.value = platformCfg.key || '';
+                                if (dom.platformFormEnable) dom.platformFormEnable.checked = platformCfg.enable !== false;
+                                // 设置选中的模型集合
+                                const selectedModels = platformCfg.models || [];
+                                selectedModels.forEach(m => state.selectedModels.add(m));
+                                updateModelSelectTriggerText();
+                                // 渲染模型白名单选择器
+                                renderModelSelector(platformName, selectedModels);
                                 const headers = platformCfg.defaultHeaders || {};
-                                Object.entries(headers).forEach(([hk, hv]) => {
-                                    addHeaderRow(hk, hv);
-                                });
+                                Object.entries(headers).forEach(([hk, hv]) => addHeaderRow(hk, hv));
                             }
                         })
                         .catch(err => {
                             showToast(`获取完整配置失败: ${err.message}`, 'warning');
                         });
                 } else {
+                    // 新平台，无模型列表
+                    dom.modelCheckboxList.innerHTML = '<p class="text-muted" style="padding:8px;">保存后才会获取模型列表</p>';
                     addHeaderRow('', '');
                 }
 
@@ -2291,6 +2476,7 @@
                 setTimeout(() => dom.platformFormName.focus(), 100);
             }
 
+            // 添加请求头行
             function addHeaderRow(key = '', value = '') {
                 const row = document.createElement('div');
                 row.className = 'input-group mb-2';
@@ -2306,8 +2492,84 @@
                 refreshIcons();
             }
 
-            dom.btnAddHeaderRow.addEventListener('click', () => addHeaderRow('', ''));
+            // 更新下拉触发器文本
+            function updateModelSelectTriggerText() {
+                const container = document.getElementById('modelChipsContainer');
+                if (!container) return;
 
+                const selected = Array.from(state.selectedModels);
+                if (selected.length === 0) {
+                    container.innerHTML = '<span class="model-chips-placeholder">选择模型</span>';
+                    return;
+                }
+
+                let html = '';
+                selected.forEach(model => {
+                    html += `<span class="model-chip" title="${escapeHtml(model)}">${escapeHtml(model)}</span>`;
+                });
+                container.innerHTML = html;
+            }
+
+            // 渲染模型白名单选择器（复选框列表）
+            async function renderModelSelector(platformName, selectedModels) {
+                const container = dom.modelCheckboxList;
+                if (!container) return;
+
+                if (!state.models) {
+                    try {
+                        await loadModelsData();
+                    } catch (e) {
+                        container.innerHTML = '<p class="text-muted" style="padding:8px;">无法获取模型列表</p>';
+                        return;
+                    }
+                }
+
+                const platformModels = state.models.filter(m => m.platform === platformName);
+                if (platformModels.length === 0) {
+                    container.innerHTML = '<p class="text-muted" style="padding:8px;">该平台暂无可选模型（可能未获取到列表）</p>';
+                    return;
+                }
+
+                let html = '';
+                platformModels.forEach(model => {
+                    const checked = selectedModels.includes(model.id) ? 'checked' : '';
+                    html += `
+                        <label class="model-checkbox-item">
+                            <input type="checkbox" class="model-checkbox" value="${escapeHtml(model.id)}" ${checked}>
+                            <span style="font-size:0.8rem;">${escapeHtml(model.id)}</span>
+                        </label>`;
+                });
+                container.innerHTML = html;
+
+                // 绑定复选框事件，更新 state.selectedModels
+                $$('.model-checkbox').forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        if (cb.checked) {
+                            state.selectedModels.add(cb.value);
+                        } else {
+                            state.selectedModels.delete(cb.value);
+                        }
+                        updateModelSelectTriggerText();
+                    });
+                });
+            }
+
+            // 模型下拉触发器点击事件
+            dom.modelSelectTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dom.modelSelectDropdown.classList.toggle('hidden');
+            });
+
+            // 点击其他区域关闭下拉
+            document.addEventListener('click', (e) => {
+                if (!dom.modelSelectDropdown.classList.contains('hidden') &&
+                    !dom.modelSelectTrigger.contains(e.target) &&
+                    !dom.modelSelectDropdown.contains(e.target)) {
+                    dom.modelSelectDropdown.classList.add('hidden');
+                }
+            });
+
+            // 平台密钥显示切换
             dom.btnTogglePlatformKey.addEventListener('click', () => {
                 const input = dom.platformFormKey;
                 const isPassword = input.type === 'password';
@@ -2316,20 +2578,21 @@
                 refreshIcons();
             });
 
+            // 模型列表模态框关闭按钮
             dom.btnCloseModelsModal.addEventListener('click', closeModelsModal);
             dom.btnCloseModelsModalFooter.addEventListener('click', closeModelsModal);
             dom.modelsModalOverlay.addEventListener('click', (e) => {
                 if (e.target === dom.modelsModalOverlay) closeModelsModal();
             });
 
-            function closePlatformModal() {
-                dom.platformModalOverlay.classList.add('closing');
-                setTimeout(() => {
-                    dom.platformModalOverlay.classList.add('hidden');
-                    dom.platformModalOverlay.classList.remove('closing');
-                }, 180);
-            }
+            // 平台模态框关闭按钮（修复点）
+            dom.btnClosePlatformModal.addEventListener('click', closePlatformModal);
+            dom.btnCancelPlatform.addEventListener('click', closePlatformModal);
+            dom.platformModalOverlay.addEventListener('click', (e) => {
+                if (e.target === dom.platformModalOverlay) closePlatformModal();
+            });
 
+            // 保存平台配置
             dom.btnSavePlatform.addEventListener('click', async () => {
                 const name = dom.platformFormName.value.trim();
                 const url = dom.platformFormUrl.value.trim();
@@ -2355,7 +2618,6 @@
                     return;
                 }
 
-                // Collect headers
                 const defaultHeaders = {};
                 const headerRows = dom.headerPairs.querySelectorAll('.input-group');
                 headerRows.forEach(row => {
@@ -2364,7 +2626,9 @@
                     if (hk) defaultHeaders[hk] = hv;
                 });
 
-                // Get current full config
+                const enable = dom.platformFormEnable ? dom.platformFormEnable.checked : true;
+                const selectedModels = Array.from(state.selectedModels);
+
                 let fullConfig = state.fullConfig;
                 if (!fullConfig) {
                     try {
@@ -2377,14 +2641,27 @@
                     }
                 }
 
-                // Build new config
                 const newConfig = {};
                 Object.entries(fullConfig || {}).forEach(([k, v]) => {
                     if (k !== originalName) {
-                        newConfig[k] = { url: v.url, key: v.key || '', defaultHeaders: v.defaultHeaders || {} };
+                        // 保留原平台的所有字段，避免丢失 enable 和 models
+                        newConfig[k] = {
+                            url: v.url,
+                            key: v.key || '',
+                            defaultHeaders: v.defaultHeaders || {},
+                            enable: typeof v.enable === 'boolean' ? v.enable : true,
+                            models: Array.isArray(v.models) ? v.models : []
+                        };
                     }
                 });
-                newConfig[name] = { url, key, defaultHeaders };
+                newConfig[name] = {
+                    url,
+                    key,
+                    defaultHeaders,
+                    enable,
+                    models: selectedModels
+                };
+                
 
                 try {
                     const result = await apiRequest('PUT', '/ai-api/config/platforms', newConfig);
@@ -2424,7 +2701,6 @@
                 if (!platformName) return;
 
                 try {
-                    // Get current full config
                     let fullConfig = state.fullConfig;
                     if (!fullConfig) {
                         fullConfig = await apiRequest('GET', '/ai-api/config/platforms');
@@ -2432,7 +2708,13 @@
                     const newConfig = {};
                     Object.entries(fullConfig || {}).forEach(([k, v]) => {
                         if (k !== platformName) {
-                            newConfig[k] = { url: v.url, key: v.key || '', defaultHeaders: v.defaultHeaders || {} };
+                            newConfig[k] = {
+                                url: v.url,
+                                key: v.key || '',
+                                defaultHeaders: v.defaultHeaders || {},
+                                enable: typeof v.enable === 'boolean' ? v.enable : true,
+                                models: Array.isArray(v.models) ? v.models : []
+                            };
                         }
                     });
                     await apiRequest('PUT', '/ai-api/config/platforms', newConfig);
@@ -2482,19 +2764,14 @@
 
             // ============ Init ============
             function init() {
-                // Load settings from localStorage
                 state.baseUrl = localStorage.getItem('ai-api-base-url') || 'http://localhost:3000';
                 state.apiKey = localStorage.getItem('ai-api-key') || '';
                 dom.settingBaseUrl.value = state.baseUrl;
                 dom.settingApiKey.value = state.apiKey;
 
-                // Load initial data
                 switchTab('overview');
-
-                // Auto-load platforms in background for counts
                 loadPlatformsData();
 
-                // Keyboard shortcuts
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
                         if (!dom.platformModalOverlay.classList.contains('hidden')) closePlatformModal();
@@ -2506,7 +2783,6 @@
                 refreshIcons();
             }
 
-            // Run
             init();
         })();
     </script>
