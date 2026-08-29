@@ -1,58 +1,67 @@
-# SimpleAISite（多平台 AI 代理）
+# SimpleAISite (Multi AI Proxy)
 
-一个基于 Node.js + Express 的轻量级 AI 接口聚合代理服务。它把多个上游 AI 平台（如 OpenCode、DeepSeek 等）统一封装成 **OpenAI 兼容格式** 的接口，并提供简单的用量统计与平台管理 API。
+一个轻量级的多 AI 平台统一代理服务。通过一个 OpenAI 兼容的 API 端点，将请求路由到多个 AI 服务商（如 DeepSeek、OpenCode 等），并提供一个可视化的中文管理后台用于平台配置、模型管理与 Token 用量统计。
 
-## 功能特性
+## ✨ 功能特性
 
-- **多平台聚合**：通过统一的内部模型名路由到不同上游平台，对外暴露标准 OpenAI `/v1` 接口。
-- **OpenAI 兼容**：支持 `/v1/models` 列表查询以及 `/v1/*` 的聊天/补全代理（含流式 SSE）。
-- **Bearer 认证**：通过 `accessKey` 保护所有接口。
-- **模型列表缓存**：启动时及按间隔自动刷新各平台模型列表，缓存至 `Config/models.json`。
-- **Token 用量统计**：自动累计每个内部模型的 Token 消耗，持久化到 `Data/models.json`。
-- **运行时管理 API**：可查看平台状态、用量、模型，并支持热更新平台配置（无需重启）。
+- **多平台代理**：统一暴露 OpenAI 兼容的 `/v1/*` 接口，自动将请求路由到配置好的多个 AI 平台。
+- **模型自动刷新**：启动时自动拉取各平台可用模型列表并缓存，可配置定时刷新间隔。
+- **模型白名单**：可为每个平台配置允许调用的模型列表（白名单），未在列表内的模型会被拒绝。
+- **Token 用量统计**：自动解析响应中的 `usage` 信息（含流式 SSE 响应），按模型维度汇总 Token 消耗。
+- **流式响应**：完整支持 `stream: true` 的 SSE 流式转发。
+- **调试模型**：内置 `debug__/model-api` 虚拟模型，可回显收到的原始请求数据，方便调试客户端。
+- **访问认证**：通过 `accessKey`（Bearer Token）保护 API 端点。
+- **可视化管理后台**：内置中文 Web 界面，支持总览、Token 明细、平台管理、设置等模块。
+- **深色 / 浅色主题**：管理后台支持主题切换。
 
-## 目录结构
+## 📁 项目结构
 
 ```
 SimpleAISite/
+├── index.js               # 服务端主程序（Express + 代理 + 管理 API）
+├── index.html             # 管理后台前端页面（单文件，无构建步骤）
+├── package.json           # 项目依赖与启动脚本
 ├── Config/
-│   ├── config.json       # 运行时配置（端口、密钥、平台列表）
-│   └── models.json       # 自动缓存的各平台模型列表
-├── Data/
-│   └── models.json       # 自动持久化的 Token 用量统计
-├── index.js              # 服务主程序（Express 应用）
-├── package.json          # 依赖与启动脚本
-└── index.html            # 前端站点页面
-
+│   ├── config.json        # 服务配置（端口、访问密钥、平台配置）
+│   └── models.json        # 模型列表缓存（自动生成）
+└── Data/
+    └── models.json        # Token 用量统计数据（自动生成）
 ```
 
-> `Config/models.json` 与 `Data/models.json` 会在首次运行时自动生成，无需手动创建。
+## 🚀 快速开始
 
-## 环境要求
+### 环境要求
 
-- Node.js 18+（使用 ESM 模块与顶层 `await`）
-- npm
+- [Node.js](https://nodejs.org/) ≥ 18（支持 ES Module）
 
-## 安装与运行
+### 安装与启动
 
 ```bash
-# 安装依赖
+# 1. 安装依赖
 npm install
 
-# 启动服务（默认读取/生成 Config/config.json）
+# 2. 配置 Config/config.json（首次会自动生成默认配置）
+
+# 3. 启动服务
 npm start
+
+# 或者
+node index.js
 ```
 
-启动后控制台会输出监听地址与认证状态，例如：
+启动成功后控制台会输出：
 
 ```
-多平台 AI 代理已启动: http://localhost:3000/v1
-认证密钥: 已启用
+=== 服务已启动 ===
+- 管理后台: http://localhost:3000
+- AI 端点: http://localhost:3000/v1/
+- Key: sk-xxxxxxxx
+================
 ```
 
-## 配置说明
+## ⚙️ 配置说明
 
-配置文件位于 `Config/config.json`，首次运行会自动创建默认值：
+配置文件位于 `Config/config.json`，首次启动时若文件不存在会自动创建默认配置。
 
 ```json
 {
@@ -62,12 +71,16 @@ npm start
     "opencode": {
       "url": "https://opencode.ai/zen/v1",
       "key": "sk-opencode-xxxxxxxx",
-      "defaultHeaders": {}
+      "defaultHeaders": {},
+      "enable": true,
+      "models": []
     },
     "deepseek": {
       "url": "https://api.deepseek.com/v1",
       "key": "sk-deepseek-xxxxxxxx",
-      "defaultHeaders": {}
+      "defaultHeaders": {},
+      "enable": true,
+      "models": []
     }
   },
   "modelsRefreshInterval": 3600000
@@ -76,108 +89,89 @@ npm start
 
 | 字段 | 说明 |
 | --- | --- |
-| `port` | 服务监听端口 |
-| `accessKey` | 客户端调用接口时需在 `Authorization: Bearer <accessKey>` 中携带的密钥；留空则关闭认证 |
-| `platforms` | 上游平台字典，键为平台名，值包含 `url`（上游 base URL）、`key`（上游 API Key）、`defaultHeaders`（附加请求头） |
-| `modelsRefreshInterval` | 模型列表自动刷新间隔（毫秒），默认 1 小时 |
+| `port` | 服务监听端口，默认 `3000` |
+| `accessKey` | 访问密钥，客户端通过 `Authorization: Bearer <accessKey>` 调用 API；页面访问无需认证 |
+| `platforms` | 平台配置对象，键为平台名称（如 `deepseek`） |
+| `platforms.<name>.url` | 该平台的 API 基础地址（OpenAI 兼容格式，如 `https://api.deepseek.com/v1`） |
+| `platforms.<name>.key` | 该平台的 API Key |
+| `platforms.<name>.defaultHeaders` | 附加的默认请求头 |
+| `platforms.<name>.enable` | 是否启用该平台，`false` 时禁用（默认 `true`） |
+| `platforms.<name>.models` | 模型白名单，为空数组表示允许全部模型 |
+| `modelsRefreshInterval` | 模型列表自动刷新间隔（毫秒），默认 `3600000`（1 小时） |
 
-## 模型命名规则
+> **安全提示**：`accessKey` 和平台 `key` 为敏感信息，请勿提交到公开仓库。
 
-代理使用内部模型名来路由请求，格式为：
+## 🔌 API 使用
 
-```
-平台名__[前缀/]模型标识
-```
+### 调用 AI 接口
 
-- `平台名`：对应 `config.json` 中 `platforms` 的键（如 `opencode`、`deepseek`）。
-- `__`：双下划线分隔符。
-- `[前缀/]模型标识`：上游平台实际的模型 ID。若不含 `/`，代理会自动补上 `/` 前缀。
+所有代理接口均为 OpenAI 兼容格式，根地址为 `http://localhost:3000/v1/`。
 
-示例：
+**内部模型命名规则**：`平台名__模型标识`（中间为两个下划线）。
 
-- `opencode__/gpt-4o` → 路由到 `opencode` 平台，上游模型为 `gpt-4o`
-- `deepseek__/deepseek-chat` → 路由到 `deepseek` 平台，上游模型为 `deepseek-chat`
+- 平台名与 `config.json` 中 `platforms` 的键一致（如 `deepseek`）
+- 模型标识即该平台返回的模型 ID
+- 模型 ID 中若包含 `/` 直接拼接；否则会在 `models` 列表中展示为 `平台名__/模型ID` 的形式，两种写法均可调用
 
-`/v1/models` 返回的模型 `id` 即为上述内部模型名，可直接用于 OpenAI 客户端。
-
-## 接口说明
-
-所有接口（除健康检查外）均需携带 `Authorization: Bearer <accessKey>` 请求头。
-
-### OpenAI 兼容接口
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/v1/models` | 返回聚合后的模型列表（内部模型名） |
-| ANY | `/v1/*` | 代理到对应上游平台的 OpenAI 接口（如 `/v1/chat/completions`），支持流式 |
-
-请求体需包含 `model` 字段，值为内部模型名，例如：
-
-```json
-{
-  "model": "deepseek__/deepseek-chat",
-  "messages": [{ "role": "user", "content": "你好" }],
-  "stream": false
-}
-```
-
-### 管理接口
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/ai-api/health` | 健康检查，返回运行状态与运行时长 |
-| GET | `/ai-api/platforms` | 各平台状态（不含密钥）与模型数量 |
-| GET | `/ai-api/models` | 所有模型及其用量统计 |
-| GET | `/ai-api/usage` | Token 用量统计 |
-| GET | `/ai-api/config/platforms` | 获取完整平台配置（含密钥） |
-| PUT | `/ai-api/config/platforms` | 更新平台配置并立即刷新模型列表 |
-
-更新平台配置示例：
+**示例**（调用 deepseek 平台的 `deepseek-chat`）：
 
 ```bash
-curl -X PUT http://localhost:3000/ai-api/config/platforms \
-  -H "Authorization: Bearer sk-your-keys" \
+curl http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-your-keys" \
   -d '{
-    "opencode": { "url": "https://opencode.ai/zen/v1", "key": "sk-new-key", "defaultHeaders": {} }
+    "model": "deepseek__deepseek-chat",
+    "messages": [{"role": "user", "content": "你好"}],
+    "stream": false
   }'
 ```
 
-## 作为 OpenAI 客户端使用
+**获取模型列表**：
 
-将 `baseURL` 指向本服务的 `/v1`，`apiKey` 使用本服务的 `accessKey`，`model` 使用内部模型名即可：
-
-```javascript
-import OpenAI from 'openai';
-
-const client = new OpenAI({
-  baseURL: 'http://localhost:3000/v1',
-  apiKey: 'sk-your-keys'   // 对应 config.json 的 accessKey
-});
-
-const completion = await client.chat.completions.create({
-  model: 'deepseek__/deepseek-chat',
-  messages: [{ role: 'user', content: '你好' }]
-});
-
-console.log(completion.choices[0].message.content);
+```bash
+curl http://localhost:3000/v1/models \
+  -H "Authorization: Bearer sk-your-keys"
 ```
 
-## 数据流示意
+**调试模型**：使用 `debug__/model-api` 作为 `model`，服务会原样返回收到的请求参数，便于排查客户端问题（无需真实平台配置）。
 
-```mermaid
-flowchart LR
-    A[OpenAI 客户端] -->|Bearer 认证| B[本代理 /v1]
-    B -->|解析 平台__模型| C{路由}
-    C --> D[opencode 上游]
-    C --> E[deepseek 上游]
-    D --> B
-    E --> B
-    B -->|累计 usage| F[Data/models.json]
-    B -->|缓存模型列表| G[Config/models.json]
-```
+### 管理 API
 
-## 依赖
+管理 API 位于 `/ai-api/*`，以下端点均需要 `accessKey` 认证（页面除外）。
 
-- [express](https://www.npmjs.com/package/express) — HTTP 服务框架
-- [axios](https://www.npmjs.com/package/axios) — 上游请求与流式转发
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/ai-api/health` | 健康检查（`status` 与运行时长） |
+| `GET` | `/ai-api/usage` | Token 用量统计 |
+| `GET` | `/ai-api/models` | 所有平台模型及调用统计（含 `call_id`） |
+| `GET` | `/ai-api/platforms` | 平台状态（URL、模型数量、启用状态，不含密钥） |
+| `GET` | `/ai-api/config/platforms` | 完整平台配置（**含密钥**） |
+| `PUT` | `/ai-api/config/platforms` | 更新平台配置，更新后自动刷新模型列表 |
+
+## 🖥️ 管理后台
+
+浏览器访问 `http://localhost:3000/` 即可打开管理后台，包含以下模块：
+
+- **总览（Overview）**：服务状态、健康信息等概览。
+- **Token 明细（Tokens）**：按模型维度展示 Token 用量明细表。
+- **平台管理（Platforms）**：可视化添加 / 编辑 / 删除平台，展示各平台模型数量与启用状态。
+- **设置（Settings）**：调整服务相关设置。
+
+管理后台采用单文件 HTML 实现，无构建步骤，可直接修改 `index.html` 定制界面。
+
+## 🔑 认证
+
+- `/v1/*` 与 `/ai-api/*`（除根页面外）均需认证。
+- 认证方式：请求头 `Authorization: Bearer <accessKey>`。
+- 当 `accessKey` 为空或未设置时，认证将被跳过。
+- 未认证请求返回 `401`。
+
+## 🛠️ 技术栈
+
+- **后端**：Node.js + [Express](https://expressjs.com/) + [Axios](https://axios-http.com/)
+- **前端**：原生 HTML / CSS / JavaScript + [Lucide](https://lucide.dev/) 图标（CDN 引入）
+- **数据存储**：JSON 文件（`Config/config.json`、`Config/models.json`、`Data/models.json`）
+
+## 📝 License
+
+MIT
