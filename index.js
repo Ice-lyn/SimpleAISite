@@ -174,6 +174,12 @@ app.use((req, res, next) => {
 
 // 认证中间件（使用动态 currentConfig.accessKey）
 app.use((req, res, next) => {
+    // 认证中间件（使用动态 currentConfig.accessKey）
+
+    // 排除根路径和静态资源（页面访问不需要认证）
+    if (req.path === '/')
+        return next();
+
     if (currentConfig.accessKey) {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
@@ -289,6 +295,10 @@ async function proxyRequest(req, res) {
         }
     }
 }
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 app.all('/v1/*', (req, res) => {
     if (req.path === '/v1/models' && req.method === 'GET') return;
