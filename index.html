@@ -2232,7 +2232,7 @@
                 let html = `
                         <div class="table-wrapper">
                         <table>
-                            <thead><tr><th>内部 ID</th><th>调用 ID</th><th>总 Tokens</th><th>最后使用</th></tr></thead>
+                            <thead><tr><th>原始 ID</th><th>调用 ID</th><th>消耗 Tokens</th><th>最后使用</th></tr></thead>
                             <tbody>`;
                 models.forEach(model => {
                     const stats = model.stats || {};
