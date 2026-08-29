@@ -101,7 +101,7 @@ async function refreshModels() {
     const platformEntries = Object.entries(currentConfig.platforms);
     const total = platformEntries.length;
     if (total === 0) {
-        console.log('没有配置任何模型提供商，跳过刷新。');
+        // console.log('没有配置任何模型提供商，跳过刷新。');
         return;
     }
 
@@ -190,9 +190,33 @@ function parseInternalModel(internalModel) {
     }
     const platform = internalModel.slice(0, idx);
     let rest = internalModel.slice(idx + 2);
+
+    // 特殊处理虚拟调试平台
+    if (platform === 'debug') {
+        // 允许 debug 平台不检查 currentConfig.platforms
+        let prefix = '';
+        let model = rest;
+        const slashIdx = rest.indexOf('/');
+        if (slashIdx !== -1) {
+            prefix = rest.slice(0, slashIdx);
+            model = rest.slice(slashIdx + 1);
+        } else {
+            if (rest.startsWith('/')) {
+                prefix = '';
+                model = rest.slice(1);
+            } else {
+                throw new Error(`模型格式应为 "平台名__[前缀/]模型"，收到: ${internalModel}`);
+            }
+        }
+        const upstreamModel = prefix ? `${prefix}/${model}` : model;
+        return { platform, upstreamModel };
+    }
+
+    // 原有逻辑
     if (!currentConfig.platforms[platform]) {
         throw new Error(`未知平台: ${platform}`);
     }
+
     let prefix = '';
     let model = rest;
     const slashIdx = rest.indexOf('/');
@@ -259,6 +283,13 @@ app.get('/v1/models', (req, res) => {
             combined.push({ id: internal, object: 'model', owned_by: platform });
         }
     }
+
+    combined.push({
+        id: 'debug__/model-api',
+        object: 'model',
+        owned_by: 'debug'
+    });
+
     res.json({ object: 'list', data: combined });
 });
 
@@ -266,9 +297,7 @@ async function proxyRequest(req, res) {
     const apiPath = req.path.replace(/^\/v1/, '');
     const { model: internalModel, ...restBody } = req.body || {};
 
-    if (!internalModel) {
-        return res.status(400).json({ error: '缺少 model 字段' });
-    }
+    if (!internalModel) return res.status(400).json({ error: '缺少 model 字段' });
 
     let platformName, upstreamModel;
     try {
@@ -279,9 +308,15 @@ async function proxyRequest(req, res) {
         return res.status(400).json({ error: err.message });
     }
 
+    // ===== 调试模型特殊处理 =====
+    if (platformName === 'debug' && upstreamModel === 'model-api') {
+        return handleDebugModel(req, res, restBody);
+    }
+    // ===== 结束调试处理 =====
+
+    // 原有平台检查
     const platformConf = currentConfig.platforms[platformName];
-    // 检查平台是否被禁用
-    if (platformConf.enable === false) {
+    if (!platformConf || platformConf.enable === false) {
         return res.status(403).json({ error: `平台 ${platformName} 已被禁用` });
     }
 
@@ -366,6 +401,85 @@ async function proxyRequest(req, res) {
             res.end();
         }
     }
+}
+
+function handleDebugModel(req, res, requestBody) {
+    // 提取请求中的关键信息
+    const messages = requestBody.messages || [];
+    const systemMessages = messages.filter(m => m.role === 'system').map(m => m.content);
+    const otherMessages = messages.filter(m => m.role !== 'system');
+    const tools = requestBody.tools || [];
+    const toolChoice = requestBody.tool_choice || null;
+    const model = req.body.model; // 原始 internalModel
+    const stream = requestBody.stream === true;
+
+    // 构建调试文本（可美化）
+    const debugInfo = {
+        received_model: model,
+        system_prompts: systemMessages,
+        conversation: otherMessages,
+        tools: tools,
+        tool_choice: toolChoice,
+        other_params: Object.keys(requestBody).filter(k => !['messages', 'tools', 'tool_choice', 'stream'].includes(k))
+    };
+    const debugText = '收到原始请求数据:\n' + JSON.stringify(debugInfo, null, 4);
+
+    // 构造 assistant 消息内容
+    const assistantContent = debugText;
+
+    // 非流式响应
+    if (!stream) {
+        return res.json({
+            id: `debug-${Date.now()}`,
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: model,
+            choices: [{
+                index: 0,
+                message: {
+                    role: 'assistant',
+                    content: assistantContent
+                },
+                finish_reason: 'stop'
+            }],
+            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+        });
+    }
+
+    // 流式响应（SSE）
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const chunk = {
+        id: `debug-${Date.now()}`,
+        object: 'chat.completion.chunk',
+        created: Math.floor(Date.now() / 1000),
+        model: model,
+        choices: [{
+            index: 0,
+            delta: { role: 'assistant', content: assistantContent },
+            finish_reason: null
+        }]
+    };
+    res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+
+    // 发送结束标记
+    const doneChunk = {
+        id: chunk.id,
+        object: 'chat.completion.chunk',
+        created: chunk.created,
+        model: model,
+        choices: [{
+            index: 0,
+            delta: {},
+            finish_reason: 'stop'
+        }]
+    };
+    res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
 }
 
 app.get('/', (req, res) => {
