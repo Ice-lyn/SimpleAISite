@@ -25,11 +25,16 @@ async function initialize() {
     await fs.mkdir(CONFIG_DIR, { recursive: true });
     await fs.mkdir(DATA_DIR, { recursive: true });
 
-    // 加载配置文件（不存在则创建默认）
+    // 加载配置文件（区分“不存在”与“解析失败”）
+    let configExists = true;
     try {
-        const raw = await fs.readFile(CONFIG_FILE, 'utf8');
-        currentConfig = JSON.parse(raw);
+        await fs.access(CONFIG_FILE);
     } catch {
+        configExists = false;
+    }
+
+    if (!configExists) {
+        // 文件不存在，创建默认配置
         currentConfig = {
             port: 3000,
             accessKey: "sk-your-keys",
@@ -49,6 +54,16 @@ async function initialize() {
         };
         await fs.writeFile(CONFIG_FILE, JSON.stringify(currentConfig, null, 2), 'utf8');
         console.log('已创建默认配置文件 Config/config.json');
+    } else {
+        // 文件存在，尝试读取并解析
+        try {
+            const raw = await fs.readFile(CONFIG_FILE, 'utf8');
+            currentConfig = JSON.parse(raw);
+        } catch (err) {
+            console.error(`配置文件 ${CONFIG_FILE} 解析失败，程序退出。`);
+            console.error(`错误详情: ${err.message}`);
+            process.exit(1);
+        }
     }
 
     // 在 currentConfig 加载完成后，补全平台默认字段
@@ -232,9 +247,14 @@ app.get('/v1/models', (req, res) => {
     const combined = [];
     for (const [platform, ids] of Object.entries(modelsCache)) {
         const platformConf = currentConfig.platforms[platform];
-        // 平台被禁用或不存在配置时跳过
         if (!platformConf || platformConf.enable === false) continue;
+
+        // 白名单过滤
+        const allowedModels = platformConf.models;
+        const filterEnabled = Array.isArray(allowedModels) && allowedModels.length > 0;
+
         for (const id of ids) {
+            if (filterEnabled && !allowedModels.includes(id)) continue; // 不在白名单则跳过
             const internal = `${platform}__${id.includes('/') ? id : '/' + id}`;
             combined.push({ id: internal, object: 'model', owned_by: platform });
         }
