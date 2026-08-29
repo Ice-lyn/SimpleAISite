@@ -51,6 +51,14 @@ async function initialize() {
         console.log('已创建默认配置文件 Config/config.json');
     }
 
+    // 在 currentConfig 加载完成后，补全平台默认字段
+    if (currentConfig.platforms) {
+        for (const [name, conf] of Object.entries(currentConfig.platforms)) {
+            if (typeof conf.enable !== 'boolean') conf.enable = true;
+            if (!Array.isArray(conf.models)) conf.models = [];
+        }
+    }
+
     // 加载模型缓存
     try {
         const cacheRaw = await fs.readFile(MODELS_CACHE_FILE, 'utf8');
@@ -75,9 +83,26 @@ async function saveConfig() {
 
 // ---------- 模型列表刷新 ----------
 async function refreshModels() {
+    const platformEntries = Object.entries(currentConfig.platforms);
+    const total = platformEntries.length;
+    if (total === 0) {
+        console.log('没有配置任何模型提供商，跳过刷新。');
+        return;
+    }
+
     console.log('开始刷新各平台模型列表...');
     const newCache = {};
-    for (const [platformName, platformConf] of Object.entries(currentConfig.platforms)) {
+
+    for (let i = 0; i < total; i++) {
+        const [platformName, platformConf] = platformEntries[i];
+        const percent = Math.floor((i / total) * 100);
+        // 渲染进度条
+        const barLength = 30;
+        const filledLength = Math.floor((i / total) * barLength);
+        const bar = '='.repeat(filledLength) + '>'.repeat(filledLength < barLength ? 1 : 0) + ' '.repeat(barLength - filledLength - 1);
+        const progressText = `[${bar}] ${percent}% - 获取 ${platformName} 模型列表...`;
+        process.stdout.write(`\r\x1b[K${progressText}`);
+
         try {
             const url = `${platformConf.url.replace(/\/$/, '')}/models`;
             const headers = {
@@ -87,14 +112,26 @@ async function refreshModels() {
             const resp = await axios.get(url, { headers, timeout: 10000 });
             const ids = resp.data?.data?.map(m => m.id) || [];
             newCache[platformName] = ids;
-            console.log(`平台 ${platformName}: 获取到 ${ids.length} 个模型`);
+
+            // 请求成功后覆盖当前行，显示成功结果
+            const successText = `[${bar}] ${percent}% - ${platformName}: 获取到 ${ids.length} 个模型`;
+            process.stdout.write(`\r\x1b[K${successText}`);
         } catch (err) {
-            console.error(`平台 ${platformName} 模型列表获取失败:`, err.message);
+            // 使用缓存或跳过
             if (modelsCache[platformName]) {
                 newCache[platformName] = modelsCache[platformName];
             }
+            // 请求失败后覆盖当前行，显示失败结果
+            const failText = `[${bar}] ${percent}% - ${platformName}: 获取失败 (${err.message})`;
+            process.stdout.write(`\r\x1b[K${failText}`);
         }
     }
+
+    // 最后输出 100% 并保存
+    const finalPercent = 100;
+    const finalBar = '='.repeat(30);
+    process.stdout.write(`\r\x1b[K[${finalBar}] ${finalPercent}% - 所有平台处理完毕\n`);
+
     modelsCache = newCache;
     await fs.writeFile(MODELS_CACHE_FILE, JSON.stringify(modelsCache, null, 2), 'utf8');
     console.log('模型列表刷新完成并已缓存');
@@ -194,6 +231,9 @@ app.use((req, res, next) => {
 app.get('/v1/models', (req, res) => {
     const combined = [];
     for (const [platform, ids] of Object.entries(modelsCache)) {
+        const platformConf = currentConfig.platforms[platform];
+        // 平台被禁用或不存在配置时跳过
+        if (!platformConf || platformConf.enable === false) continue;
         for (const id of ids) {
             const internal = `${platform}__${id.includes('/') ? id : '/' + id}`;
             combined.push({ id: internal, object: 'model', owned_by: platform });
@@ -220,6 +260,18 @@ async function proxyRequest(req, res) {
     }
 
     const platformConf = currentConfig.platforms[platformName];
+    // 检查平台是否被禁用
+    if (platformConf.enable === false) {
+        return res.status(403).json({ error: `平台 ${platformName} 已被禁用` });
+    }
+
+    // 检查模型是否在自定义允许列表中（如果配置了 models 且非空）
+    if (Array.isArray(platformConf.models) && platformConf.models.length > 0) {
+        if (!platformConf.models.includes(upstreamModel)) {
+            return res.status(400).json({ error: `模型 ${upstreamModel} 不在平台 ${platformName} 的允许列表中` });
+        }
+    }
+
     const upstreamUrl = platformConf.url.replace(/\/$/, '') + apiPath;
 
     const headers = { ...req.headers };
@@ -329,6 +381,8 @@ app.get('/ai-api/usage', (req, res) => res.json(usageStats));
 app.get('/ai-api/models', (req, res) => {
     const combined = [];
     for (const [platform, ids] of Object.entries(modelsCache)) {
+        const platformConf = currentConfig.platforms[platform];
+        if (!platformConf || platformConf.enable === false) continue;
         for (const id of ids) {
             const internal = `${platform}__${id.includes('/') ? id : '/' + id}`;
             combined.push({
@@ -348,7 +402,9 @@ app.get('/ai-api/platforms', (req, res) => {
     for (const [name, conf] of Object.entries(currentConfig.platforms)) {
         info[name] = {
             url: conf.url,
-            model_count: (modelsCache[name] || []).length
+            model_count: (modelsCache[name] || []).length,
+            enable: conf.enable !== false,   // 默认 true
+            models: conf.models || []        // 返回自定义模型列表（可能为空数组）
         };
     }
     res.json(info);
@@ -378,6 +434,15 @@ app.put('/ai-api/config/platforms', async (req, res) => {
         }
     }
 
+    for (const [name, conf] of Object.entries(newPlatforms)) {
+        if (!conf.url || !conf.key) {
+            return res.status(400).json({ error: `平台 ${name} 缺少 url 或 key` });
+        }
+        // 补全默认值
+        if (typeof conf.enable !== 'boolean') conf.enable = true;
+        if (!Array.isArray(conf.models)) conf.models = [];
+    }
+
     // 更新内存配置
     currentConfig.platforms = newPlatforms;
     try {
@@ -394,16 +459,21 @@ app.put('/ai-api/config/platforms', async (req, res) => {
 // ---------- 启动 ----------
 await initialize();
 
-// 启动后首次刷新模型列表
-refreshModels();
-
-// 定时刷新
-if (currentConfig.modelsRefreshInterval > 1)
-    setInterval(refreshModels, currentConfig.modelsRefreshInterval || 3600000);
-
 app.listen(currentConfig.port, () => {
-    const url = `http://localhost:${currentConfig.port}`
-    console.log(`模型管理后台: ${url}`);
-    console.log(`AI请求端点: ${url}/v1`);
-    console.log(`认证密钥: ${currentConfig.accessKey ? '已启用' : '未启用'}`);
+    const url = `http://localhost:${currentConfig.port}`;
+    [
+        "=== 服务已启动 ===",
+        `- 管理后台: ${url}`,
+        `- AI 端点: ${url}/v1/`,
+        `- Key: ${currentConfig.accessKey ?? '未启用'}`,
+        "================"
+    ].forEach(msg => console.log(msg));
+
+    // 刷新模型列表
+    refreshModels();
+    if (currentConfig.modelsRefreshInterval > 1)
+        setInterval(refreshModels, currentConfig.modelsRefreshInterval || 3600000);
 });
+
+
+
