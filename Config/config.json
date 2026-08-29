@@ -1,0 +1,17 @@
+{
+    "port": 3000,
+    "accessKey": "sk-114514",
+    "platforms": {
+        "opencode": {
+            "url": "https://opencode.ai.com/zen/v1",
+            "key": "sk-opencode-xxxxxxxx",
+            "defaultHeaders": {}
+        },
+        "deepseek": {
+            "url": "https://api.deepseek.com/v1",
+            "key": "sk-deepseek-xxxxxxxx",
+            "defaultHeaders": {}
+        }
+    },
+    "modelsRefreshInterval": 3600000
+}

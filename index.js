@@ -3,44 +3,81 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import config from './Config/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const CONFIG_DIR = path.join(__dirname, 'Config');
 const DATA_DIR = path.join(__dirname, 'Data');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const MODELS_CACHE_FILE = path.join(CONFIG_DIR, 'models.json');
 const USAGE_FILE = path.join(DATA_DIR, 'models.json');
 
-// 确保 Data 目录存在
-await fs.mkdir(DATA_DIR, { recursive: true });
+// ---------- 全局状态 ----------
+let currentConfig = null;          // 当前配置（动态）
+let modelsCache = {};              // 缓存模型列表
+let usageStats = {};               // Token 统计
+let saveTimer = null;
 
-// === 内存状态 ===
-let modelsCache = {};               // 缓存各平台模型列表 { platform: [ids] }
-let usageStats = {};                // Token 统计 { internalModel: { total_xxx: number, last_used } }
+// ---------- 初始化 ----------
+async function initialize() {
+    // 确保目录存在
+    await fs.mkdir(CONFIG_DIR, { recursive: true });
+    await fs.mkdir(DATA_DIR, { recursive: true });
 
-// === 初始化加载 ===
-async function loadInitialData() {
+    // 加载配置文件（不存在则创建默认）
     try {
-        const cacheData = await fs.readFile(MODELS_CACHE_FILE, 'utf8');
-        modelsCache = JSON.parse(cacheData);
+        const raw = await fs.readFile(CONFIG_FILE, 'utf8');
+        currentConfig = JSON.parse(raw);
+    } catch {
+        currentConfig = {
+            port: 3000,
+            accessKey: "sk-your-keys",
+            platforms: {
+                opencode: {
+                    url: "https://opencode.ai/zen/v1",
+                    key: "sk-opencode-xxxxxxxx",
+                    defaultHeaders: {}
+                },
+                deepseek: {
+                    url: "https://api.deepseek.com/v1",
+                    key: "sk-deepseek-xxxxxxxx",
+                    defaultHeaders: {}
+                }
+            },
+            modelsRefreshInterval: 3600000
+        };
+        await fs.writeFile(CONFIG_FILE, JSON.stringify(currentConfig, null, 2), 'utf8');
+        console.log('已创建默认配置文件 Config/config.json');
+    }
+
+    // 加载模型缓存
+    try {
+        const cacheRaw = await fs.readFile(MODELS_CACHE_FILE, 'utf8');
+        modelsCache = JSON.parse(cacheRaw);
     } catch {
         modelsCache = {};
     }
 
+    // 加载用量统计
     try {
-        const usageData = await fs.readFile(USAGE_FILE, 'utf8');
-        usageStats = JSON.parse(usageData);
+        const usageRaw = await fs.readFile(USAGE_FILE, 'utf8');
+        usageStats = JSON.parse(usageRaw);
     } catch {
         usageStats = {};
     }
 }
 
-// === 模型列表自动刷新 ===
+// ---------- 保存配置到文件 ----------
+async function saveConfig() {
+    await fs.writeFile(CONFIG_FILE, JSON.stringify(currentConfig, null, 2), 'utf8');
+}
+
+// ---------- 模型列表刷新 ----------
 async function refreshModels() {
+    console.log('开始刷新各平台模型列表...');
     const newCache = {};
-    for (const [platformName, platformConf] of Object.entries(config.platforms)) {
+    for (const [platformName, platformConf] of Object.entries(currentConfig.platforms)) {
         try {
             const url = `${platformConf.url.replace(/\/$/, '')}/models`;
             const headers = {
@@ -48,25 +85,22 @@ async function refreshModels() {
                 ...platformConf.defaultHeaders
             };
             const resp = await axios.get(url, { headers, timeout: 10000 });
-            newCache[platformName] = resp.data?.data?.map(m => m.id) || [];
+            const ids = resp.data?.data?.map(m => m.id) || [];
+            newCache[platformName] = ids;
+            console.log(`平台 ${platformName}: 获取到 ${ids.length} 个模型`);
         } catch (err) {
             console.error(`平台 ${platformName} 模型列表获取失败:`, err.message);
-            // 保留旧缓存
-            if (modelsCache[platformName])
+            if (modelsCache[platformName]) {
                 newCache[platformName] = modelsCache[platformName];
+            }
         }
     }
     modelsCache = newCache;
     await fs.writeFile(MODELS_CACHE_FILE, JSON.stringify(modelsCache, null, 2), 'utf8');
+    console.log('模型列表刷新完成并已缓存');
 }
 
-// 定期刷新
-if (config.modelsRefreshInterval > 0)
-    setInterval(refreshModels, config.modelsRefreshInterval || 3600000);
-refreshModels(); // 启动时刷新
-
-// === Token 使用量持久化 ===
-let saveTimer = null;
+// ---------- Token 用量持久化 ----------
 function scheduleSaveUsage() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
@@ -75,10 +109,9 @@ function scheduleSaveUsage() {
         } catch (err) {
             console.error('保存用量数据失败:', err);
         }
-    }, 5000); // 5 秒后保存（合并快速连续更新）
+    }, 5000);
 }
 
-// 扁平化 usage 对象并累加到统计
 function updateUsageStats(internalModel, usageObj) {
     if (!usageObj || typeof usageObj !== 'object') return;
     const entry = usageStats[internalModel] || (usageStats[internalModel] = {});
@@ -97,19 +130,17 @@ function updateUsageStats(internalModel, usageObj) {
     scheduleSaveUsage();
 }
 
-// === 解析内部模型名称 ===
-// 格式: platform__prefix/model 或 platform__/model
+// ---------- 解析内部模型名称 ----------
 function parseInternalModel(internalModel) {
     const idx = internalModel.indexOf('__');
     if (idx === -1) {
         throw new Error(`模型名称格式错误，应为 "平台名__模型标识"，收到: ${internalModel}`);
     }
     const platform = internalModel.slice(0, idx);
-    let rest = internalModel.slice(idx + 2); // 可能包含前缀和模型
-    if (!config.platforms[platform]) {
+    let rest = internalModel.slice(idx + 2);
+    if (!currentConfig.platforms[platform]) {
         throw new Error(`未知平台: ${platform}`);
     }
-    // 分离前缀和真实模型
     let prefix = '';
     let model = rest;
     const slashIdx = rest.indexOf('/');
@@ -117,50 +148,43 @@ function parseInternalModel(internalModel) {
         prefix = rest.slice(0, slashIdx);
         model = rest.slice(slashIdx + 1);
     } else {
-        // 没有斜杠，说明格式错误（应该始终有斜杠，至少应为 "/model"）
-        // 但为兼容，如果 rest 不以 / 开头，则视为前缀为空，模型=rest，内部实际为 platform__/rest
-        // 按照规范应报错，但这里宽松处理
         if (rest.startsWith('/')) {
             prefix = '';
             model = rest.slice(1);
         } else {
-            // 不符合规范，报错
             throw new Error(`模型格式应为 "平台名__[前缀/]模型"，收到: ${internalModel}`);
         }
     }
-    // 外部实际模型：前缀非空则 prefix/model，否则 model
     const upstreamModel = prefix ? `${prefix}/${model}` : model;
     return { platform, upstreamModel };
 }
 
-// === Express 应用 ===
+// ---------- Express 应用 ----------
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// CORS 跨域
+// CORS
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
     next();
 });
 
-// 认证中间件
+// 认证中间件（使用动态 currentConfig.accessKey）
 app.use((req, res, next) => {
-    if (config.accessKey) {
+    if (currentConfig.accessKey) {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-        if (token !== config.accessKey) {
+        if (token !== currentConfig.accessKey) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
     }
     next();
 });
 
-// === 聚合模型列表接口 ===
+// ---------- OpenAI 格式接口 ----------
 app.get('/v1/models', (req, res) => {
     const combined = [];
     for (const [platform, ids] of Object.entries(modelsCache)) {
@@ -172,9 +196,8 @@ app.get('/v1/models', (req, res) => {
     res.json({ object: 'list', data: combined });
 });
 
-// === 代理转发核心 ===
 async function proxyRequest(req, res) {
-    const apiPath = req.path.replace(/^\/v1/, ''); // 例如 /chat/completions
+    const apiPath = req.path.replace(/^\/v1/, '');
     const { model: internalModel, ...restBody } = req.body || {};
 
     if (!internalModel) {
@@ -190,38 +213,31 @@ async function proxyRequest(req, res) {
         return res.status(400).json({ error: err.message });
     }
 
-    const platformConf = config.platforms[platformName];
+    const platformConf = currentConfig.platforms[platformName];
     const upstreamUrl = platformConf.url.replace(/\/$/, '') + apiPath;
 
-    // 准备请求头
     const headers = { ...req.headers };
     delete headers.host;
-    delete headers['content-length']; // 让 axios 自动设置
+    delete headers['content-length'];
     headers['authorization'] = `Bearer ${platformConf.key}`;
     Object.assign(headers, platformConf.defaultHeaders || {});
 
     const requestBody = { ...restBody, model: upstreamModel };
     const isStream = requestBody.stream === true;
 
-    // 记录请求开始
     try {
         if (!isStream) {
-            // 非流式
             const response = await axios.post(upstreamUrl, requestBody, {
                 headers,
                 responseType: 'json',
                 timeout: 300000,
-                validateStatus: () => true // 手动处理状态码
+                validateStatus: () => true
             });
-
-            // 提取 usage 并更新统计
             if (response.data?.usage) {
                 updateUsageStats(internalModel, response.data.usage);
             }
-
             res.status(response.status).json(response.data);
         } else {
-            // 流式
             const upstreamResp = await axios.post(upstreamUrl, requestBody, {
                 headers,
                 responseType: 'stream',
@@ -230,7 +246,6 @@ async function proxyRequest(req, res) {
             });
 
             if (upstreamResp.status !== 200) {
-                // 非 200 错误，尝试读取错误内容
                 let errorBody = '';
                 upstreamResp.data.on('data', chunk => errorBody += chunk);
                 upstreamResp.data.on('end', () => {
@@ -244,40 +259,26 @@ async function proxyRequest(req, res) {
                 return;
             }
 
-            // 设置 SSE 响应头
             res.status(200);
             res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
             res.setHeader('Connection', 'keep-alive');
 
-            // 用于累积流式数据以提取 usage
             let streamData = '';
-
             upstreamResp.data.on('data', (chunk) => {
-                // 转发给客户端
                 res.write(chunk);
-                // 累积
                 streamData += chunk.toString('utf8');
             });
-
             upstreamResp.data.on('end', () => {
                 res.end();
-                // 从累积的 SSE 数据中提取最后一个包含 usage 的 data
                 const usage = extractUsageFromSSE(streamData);
-                if (usage) {
-                    updateUsageStats(internalModel, usage);
-                }
+                if (usage) updateUsageStats(internalModel, usage);
             });
-
             upstreamResp.data.on('error', (err) => {
                 console.error('上游流错误:', err);
                 res.end();
             });
-
-            // 客户端断开时中断上游
-            req.on('close', () => {
-                upstreamResp.data.destroy();
-            });
+            req.on('close', () => upstreamResp.data.destroy());
         }
     } catch (err) {
         console.error(`代理请求失败: ${err.message}`);
@@ -289,7 +290,11 @@ async function proxyRequest(req, res) {
     }
 }
 
-// 从 SSE 字符串中提取 usage（查找最后一个包含 "usage" 的 data: 行）
+app.all('/v1/*', (req, res) => {
+    if (req.path === '/v1/models' && req.method === 'GET') return;
+    proxyRequest(req, res);
+});
+
 function extractUsageFromSSE(sseString) {
     const lines = sseString.split('\n');
     let usage = null;
@@ -299,31 +304,18 @@ function extractUsageFromSSE(sseString) {
             if (dataStr === '[DONE]') continue;
             try {
                 const parsed = JSON.parse(dataStr);
-                if (parsed.usage) {
-                    usage = parsed.usage;
-                }
+                if (parsed.usage) usage = parsed.usage;
             } catch { }
         }
     }
     return usage;
 }
 
-// 挂载所有 /v1/* 请求（排除 /v1/models）
-app.all('/v1/*', (req, res) => {
-    if (req.path === '/v1/models' && req.method === 'GET') {
-        // 已经处理过了，不会到这里
-        return;
-    }
-    proxyRequest(req, res);
-});
+// ---------- 站点 API ----------
+// 获取 Token 使用统计
+app.get('/ai-api/usage', (req, res) => res.json(usageStats));
 
-// === 站点 API ===
-// GET /ai-api/usage - 获取 Token 使用统计
-app.get('/ai-api/usage', (req, res) => {
-    res.json(usageStats);
-});
-
-// GET /ai-api/models - 获取模型列表及使用概览
+// 获取所有模型及统计
 app.get('/ai-api/models', (req, res) => {
     const combined = [];
     for (const [platform, ids] of Object.entries(modelsCache)) {
@@ -340,10 +332,10 @@ app.get('/ai-api/models', (req, res) => {
     res.json(combined);
 });
 
-// GET /ai-api/platforms - 平台状态（不含密钥）
+// 获取平台状态（不包含 key）
 app.get('/ai-api/platforms', (req, res) => {
     const info = {};
-    for (const [name, conf] of Object.entries(config.platforms)) {
+    for (const [name, conf] of Object.entries(currentConfig.platforms)) {
         info[name] = {
             url: conf.url,
             model_count: (modelsCache[name] || []).length
@@ -352,14 +344,54 @@ app.get('/ai-api/platforms', (req, res) => {
     res.json(info);
 });
 
-// GET /ai-api/health - 健康检查
+// 健康检查
 app.get('/ai-api/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime() });
 });
 
-// === 启动服务器 ===
-await loadInitialData();
-app.listen(config.port, () => {
-    console.log(`多平台 AI 代理已启动: http://localhost:${config.port}/v1`);
-    console.log(`认证密钥: ${config.accessKey ? '已启用' : '未启用'}`);
+// 获取完整平台配置（包含密钥，需要认证）
+app.get('/ai-api/config/platforms', (req, res) => {
+    res.json(currentConfig.platforms);
+});
+
+// 更新平台配置
+app.put('/ai-api/config/platforms', async (req, res) => {
+    const newPlatforms = req.body;
+    if (!newPlatforms || typeof newPlatforms !== 'object') {
+        return res.status(400).json({ error: '请求体必须是 platforms 对象' });
+    }
+
+    // 基本格式验证
+    for (const [name, conf] of Object.entries(newPlatforms)) {
+        if (!conf.url || !conf.key) {
+            return res.status(400).json({ error: `平台 ${name} 缺少 url 或 key` });
+        }
+    }
+
+    // 更新内存配置
+    currentConfig.platforms = newPlatforms;
+    try {
+        await saveConfig();
+        // 立即刷新模型列表
+        refreshModels();
+        res.json({ success: true, platforms: newPlatforms });
+    } catch (err) {
+        console.error('保存配置失败:', err);
+        res.status(500).json({ error: '保存配置失败', details: err.message });
+    }
+});
+
+// ---------- 启动 ----------
+await initialize();
+
+// 启动后首次刷新模型列表
+refreshModels();
+
+// 定时刷新
+if (currentConfig.modelsRefreshInterval > 1)
+    setInterval(refreshModels, currentConfig.modelsRefreshInterval || 3600000);
+
+app.listen(currentConfig.port, () => {
+    console.log(`多平台 AI 代理已启动: http://localhost:${currentConfig.port}/v1`);
+    console.log(`认证密钥: ${currentConfig.accessKey ? '已启用' : '未启用'}`);
 });
