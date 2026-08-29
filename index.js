@@ -402,6 +402,8 @@ if (currentConfig.modelsRefreshInterval > 1)
     setInterval(refreshModels, currentConfig.modelsRefreshInterval || 3600000);
 
 app.listen(currentConfig.port, () => {
-    console.log(`多平台 AI 代理已启动: http://localhost:${currentConfig.port}/v1`);
+    const url = `http://localhost:${currentConfig.port}`
+    console.log(`模型管理后台: ${url}`);
+    console.log(`AI请求端点: ${url}/v1`);
     console.log(`认证密钥: ${currentConfig.accessKey ? '已启用' : '未启用'}`);
 });
