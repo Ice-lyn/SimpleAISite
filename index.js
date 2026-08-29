@@ -100,52 +100,59 @@ async function saveConfig() {
 async function refreshModels() {
     const platformEntries = Object.entries(currentConfig.platforms);
     const total = platformEntries.length;
-    if (total === 0) {
-        // console.log('没有配置任何模型提供商，跳过刷新。');
-        return;
-    }
+    if (total === 0) return;
 
     console.log('开始刷新各平台模型列表...');
     const newCache = {};
 
-    for (let i = 0; i < total; i++) {
-        const [platformName, platformConf] = platformEntries[i];
-        const percent = Math.floor((i / total) * 100);
-        // 渲染进度条
-        const barLength = 30;
-        const filledLength = Math.floor((i / total) * barLength);
-        const bar = '='.repeat(filledLength) + '>'.repeat(filledLength < barLength ? 1 : 0) + ' '.repeat(barLength - filledLength - 1);
-        const progressText = `[${bar}] ${percent}% - 获取 ${platformName} 模型列表...`;
+    let completed = 0;
+    const barLength = 30;
+    const renderProgress = (lastResult = '') => {
+        const percent = total === 0 ? 100 : Math.floor((completed / total) * 100);
+        const filledLength = Math.floor((completed / total) * barLength);
+        const bar = '='.repeat(filledLength) + (filledLength < barLength ? '>' : '') + ' '.repeat(Math.max(0, barLength - filledLength - 1));
+        const progressText = `[${bar}] ${percent}%${lastResult ? ' - ' + lastResult : ''}`;
         process.stdout.write(`\r\x1b[K${progressText}`);
+    };
 
-        try {
-            const url = `${platformConf.url.replace(/\/$/, '')}/models`;
-            const headers = {
-                'Authorization': `Bearer ${platformConf.key}`,
-                ...platformConf.defaultHeaders
-            };
-            const resp = await axios.get(url, { headers, timeout: 10000 });
-            const ids = resp.data?.data?.map(m => m.id) || [];
-            newCache[platformName] = ids;
+    renderProgress('开始处理...');
 
-            // 请求成功后覆盖当前行，显示成功结果
-            const successText = `[${bar}] ${percent}% - ${platformName}: 获取到 ${ids.length} 个模型`;
-            process.stdout.write(`\r\x1b[K${successText}`);
-        } catch (err) {
-            // 使用缓存或跳过
-            if (modelsCache[platformName]) {
-                newCache[platformName] = modelsCache[platformName];
+    // 并发控制：最多同时 10 个请求
+    const concurrency = 10;
+    let index = 0;
+
+    const worker = async () => {
+        while (index < total) {
+            const currentIndex = index++;
+            const [platformName, platformConf] = platformEntries[currentIndex];
+            try {
+                const url = `${platformConf.url.replace(/\/$/, '')}/models`;
+                const headers = {
+                    'Authorization': `Bearer ${platformConf.key}`,
+                    ...platformConf.defaultHeaders
+                };
+                const resp = await axios.get(url, { headers, timeout: 10000 });
+                const ids = resp.data?.data?.map(m => m.id) || [];
+                newCache[platformName] = ids;
+                completed++;
+                renderProgress(`${platformName}: ${ids.length} 个模型`);
+            } catch (err) {
+                if (modelsCache[platformName]) {
+                    newCache[platformName] = modelsCache[platformName];
+                }
+                completed++;
+                renderProgress(`${platformName}: 获取失败 (${err.message})`);
             }
-            // 请求失败后覆盖当前行，显示失败结果
-            const failText = `[${bar}] ${percent}% - ${platformName}: 获取失败 (${err.message})`;
-            process.stdout.write(`\r\x1b[K${failText}`);
         }
-    }
+    };
 
-    // 最后输出 100% 并保存
-    const finalPercent = 100;
-    const finalBar = '='.repeat(30);
-    process.stdout.write(`\r\x1b[K[${finalBar}] ${finalPercent}% - 所有平台处理完毕\n`);
+    // 启动 worker
+    const workers = Array.from({ length: Math.min(concurrency, total) }, () => worker());
+    await Promise.all(workers);
+
+    // 最终 100% 进度行
+    const finalBar = '='.repeat(barLength);
+    process.stdout.write(`\r\x1b[K[${finalBar}] 100% - 所有平台处理完毕\n`);
 
     modelsCache = newCache;
     await fs.writeFile(MODELS_CACHE_FILE, JSON.stringify(modelsCache, null, 2), 'utf8');
