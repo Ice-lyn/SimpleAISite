@@ -141,7 +141,7 @@ async function refreshModels() {
                     newCache[platformName] = modelsCache[platformName];
                 }
                 completed++;
-                renderProgress(`${platformName}: 获取失败 (${err.message})`);
+                renderProgress(`${platformName}: 获取失败 (${err.message})\n`);
             }
         }
     };
